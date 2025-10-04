@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api import dataset
+from routers import dataset
 
 app = FastAPI(title="Dataset API", version="1.0")
 

@@ -1,6 +1,6 @@
 import uuid
 import pandas as pd
-from fastapi import APIRouter, UploadFile, File, HTTPException, Query
+from fastapi import APIRouter, UploadFile, File, HTTPException
 from typing import Optional
 from models.dataset import Dataset, AggregateRequest
 from db.mongo import dataset_collection
