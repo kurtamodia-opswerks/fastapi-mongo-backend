@@ -13,11 +13,3 @@ class Dataset(BaseModel):
     price_usd: Optional[float] = None
     sales_volume: Optional[int] = None
 
-
-class AggregateRequest(BaseModel):
-    upload_id: str
-    x_axis: str
-    y_axis: str
-    agg_func: str = "sum"
-    year_from: Optional[int] = None
-    year_to: Optional[int] = None

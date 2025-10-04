@@ -1,10 +1,12 @@
 from fastapi import APIRouter, HTTPException
-from models.dataset import AggregateRequest
+from models.chart import AggregateRequest, ChartSaveRequest
 from db.mongo import dataset_collection
+from db.mongo import charts_collection
+from bson.objectid import ObjectId
 
 router = APIRouter()
 
-
+# Aggregate dataset and return results
 @router.post("/aggregate")
 async def aggregate(request: AggregateRequest):
     upload_id = request.upload_id
@@ -40,3 +42,30 @@ async def aggregate(request: AggregateRequest):
     if not result:
         raise HTTPException(status_code=404, detail="No records found")
     return result
+
+
+# Save chart configuration
+@router.post("/save")
+async def save_chart(request: ChartSaveRequest):
+    chart_doc = request.dict()
+    result = charts_collection.insert_one(chart_doc)
+    return {"message": "Chart saved successfully", "chart_id": str(result.inserted_id)}
+
+
+# Fetch all saved charts for a specific dataset
+@router.get("/saved/{upload_id}")
+async def get_saved_charts(upload_id: str):
+    charts = list(charts_collection.find({"upload_id": upload_id}, {"_id": 1, "name": 1, "chart_type": 1, "x_axis": 1, "y_axis": 1, "agg_func": 1, "year_from": 1, "year_to": 1}))
+    for chart in charts:
+        chart["_id"] = str(chart["_id"])
+    return charts
+
+
+# Fetch single chart configuration by chart_id
+@router.get("/saved/chart/{chart_id}")
+async def get_chart(chart_id: str):
+    chart = charts_collection.find_one({"_id": ObjectId(chart_id)})
+    if not chart:
+        raise HTTPException(status_code=404, detail="Chart not found")
+    chart["_id"] = str(chart["_id"])
+    return chart
