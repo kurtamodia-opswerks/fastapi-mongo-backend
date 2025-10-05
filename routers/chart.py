@@ -4,7 +4,7 @@ from models.dataset import dataset_collection
 from models.chart import charts_collection
 from bson.objectid import ObjectId
 
-router = APIRouter()
+router = APIRouter(prefix="/chart", tags=["Chart"])
 
 @router.post("/aggregate")
 async def aggregate(request: AggregateRequest):

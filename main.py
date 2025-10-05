@@ -21,5 +21,5 @@ app.add_middleware(
 )
 
 # include routers
-app.include_router(dataset.router, prefix="/dataset", tags=["Dataset"])
-app.include_router(chart.router, prefix="/chart", tags=["Chart"])
+app.include_router(dataset.router, prefix="/api")
+app.include_router(chart.router, prefix="/api")
