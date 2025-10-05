@@ -5,7 +5,7 @@ from models.dataset import Dataset
 from db.mongo import dataset_collection
 from serializers.dataset import all_data
 
-router = APIRouter()
+router = APIRouter(prefix="/dataset", tags=["Dataset"])
 
 EXPECTED_COLUMNS = ["model", "year", "region", "color", 
                     "transmission", "mileage_km", "price_usd", "sales_volume"]

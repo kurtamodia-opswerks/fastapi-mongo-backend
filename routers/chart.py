@@ -4,7 +4,7 @@ from db.mongo import dataset_collection
 from db.mongo import charts_collection
 from bson.objectid import ObjectId
 
-router = APIRouter()
+router = APIRouter(prefix="/chart", tags=["Chart"])
 
 # Aggregate dataset and return results
 @router.post("/aggregate")
