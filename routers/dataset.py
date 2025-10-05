@@ -1,8 +1,8 @@
 import uuid
 import pandas as pd
 from fastapi import APIRouter, UploadFile, File, HTTPException
-from models.dataset import Dataset
-from db.mongo import dataset_collection
+from schemas.dataset import Dataset
+from models.dataset import dataset_collection
 from serializers.dataset import all_data
 
 router = APIRouter()
@@ -33,11 +33,8 @@ async def upload_dataset(file: UploadFile = File(...)):
 
         valid_records = []
         for rec in records:
-            try:
-                dataset = Dataset(**rec)
-                valid_records.append(dataset.dict())
-            except Exception as e:
-                raise HTTPException(status_code=400, detail={"error": str(e), "row": rec})
+            dataset = Dataset(**rec)
+            valid_records.append(dataset.dict())
 
         if valid_records:
             dataset_collection.insert_many(valid_records)
@@ -49,8 +46,7 @@ async def upload_dataset(file: UploadFile = File(...)):
 
 @router.get("/{upload_id}/contents")
 async def get_datasets(upload_id: str):
-    """Fetch datasets (optionally by upload_id)"""
-    query = {"upload_id": upload_id} if upload_id else {}
+    query = {"upload_id": upload_id}
     records = list(dataset_collection.find(query, {"_id": 0}))
     if not records:
         raise HTTPException(status_code=404, detail="No records found")
@@ -59,11 +55,9 @@ async def get_datasets(upload_id: str):
 
 @router.get("/{upload_id}/headers")
 async def get_headers(upload_id: str):
-    """Return headers that have at least one valid value"""
-    query = {"upload_id": upload_id} if upload_id else {}
+    query = {"upload_id": upload_id}
     records = list(dataset_collection.find(query, {"_id": 0}))
     if not records:
         raise HTTPException(status_code=404, detail="No records found")
     df = pd.DataFrame(records)
     return {"valid_headers": [col for col in df.columns if df[col].notnull().any()]}
-
