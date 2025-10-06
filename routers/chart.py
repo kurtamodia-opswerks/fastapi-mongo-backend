@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from schemas.chart import AggregateRequest, ChartSaveRequest
+from schemas.chart import AggregateRequest, Chart
 from models.dataset import dataset_collection
 from models.chart import charts_collection
 from bson.objectid import ObjectId
@@ -36,7 +36,7 @@ async def aggregate(request: AggregateRequest):
 
 
 @router.post("/save")
-async def save_chart(request: ChartSaveRequest):
+async def save_chart(request: Chart):
     result = charts_collection.insert_one(request.dict())
     return {"message": "Chart saved successfully", "chart_id": str(result.inserted_id)}
 

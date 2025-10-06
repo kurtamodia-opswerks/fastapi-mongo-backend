@@ -10,7 +10,7 @@ class AggregateRequest(BaseModel):
     year_to: Optional[int] = None
 
 
-class ChartSaveRequest(BaseModel):
+class Chart(BaseModel):
     upload_id: str
     chart_type: str
     x_axis: str
