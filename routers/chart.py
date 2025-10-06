@@ -8,6 +8,7 @@ router = APIRouter(prefix="/chart", tags=["Chart"])
 
 @router.post("/aggregate")
 async def aggregate(request: AggregateRequest):
+    """Returns aggregated data based on the provided request parameters"""
     funcs = {"sum": "$sum", "avg": "$avg", "count": "$sum", "min": "$min", "max": "$max"}
     if request.agg_func not in funcs:
         raise HTTPException(status_code=400, detail=f"Invalid agg_func. Choose from {list(funcs.keys())}")
@@ -37,12 +38,14 @@ async def aggregate(request: AggregateRequest):
 
 @router.post("/save")
 async def save_chart(request: Chart):
+    """Saves the chart data to the database"""
     result = charts_collection.insert_one(request.dict())
     return {"message": "Chart saved successfully", "chart_id": str(result.inserted_id)}
 
 
 @router.get("/saved/{upload_id}")
 async def get_saved_charts(upload_id: str):
+    """Returns all saved charts for a given upload_id"""
     charts = list(charts_collection.find({"upload_id": upload_id}, {"_id": 1, "name": 1, "chart_type": 1, "x_axis": 1, "y_axis": 1, "agg_func": 1, "year_from": 1, "year_to": 1}))
     for chart in charts:
         chart["_id"] = str(chart["_id"])
@@ -51,6 +54,7 @@ async def get_saved_charts(upload_id: str):
 
 @router.get("/saved/chart/{chart_id}")
 async def get_chart(chart_id: str):
+    """Returns a specific saved chart"""
     chart = charts_collection.find_one({"_id": ObjectId(chart_id)})
     if not chart:
         raise HTTPException(status_code=404, detail="Chart not found")

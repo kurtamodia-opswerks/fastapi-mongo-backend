@@ -46,6 +46,7 @@ async def upload_dataset(file: UploadFile = File(...)):
 
 @router.get("/{upload_id}/contents")
 async def get_datasets(upload_id: str):
+    """Returns all contents for a given upload_id"""
     query = {"upload_id": upload_id}
     records = list(dataset_collection.find(query, {"_id": 0}))
     if not records:
@@ -55,6 +56,7 @@ async def get_datasets(upload_id: str):
 
 @router.get("/{upload_id}/headers")
 async def get_headers(upload_id: str):
+    """Returns all headers for a given upload_id"""
     query = {"upload_id": upload_id}
     records = list(dataset_collection.find(query, {"_id": 0}))
     if not records:
@@ -63,10 +65,9 @@ async def get_headers(upload_id: str):
     return {"valid_headers": [col for col in df.columns if df[col].notnull().any()]}
 
 
-from fastapi import APIRouter, HTTPException
-
 @router.get("/all")
 async def get_all_upload_ids():
+    """Returns all unique upload_id values"""
     # Use MongoDB's distinct() to get unique upload_id values
     upload_ids = dataset_collection.distinct("upload_id")
 
