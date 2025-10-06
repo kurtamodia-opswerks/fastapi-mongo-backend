@@ -61,3 +61,17 @@ async def get_headers(upload_id: str):
         raise HTTPException(status_code=404, detail="No records found")
     df = pd.DataFrame(records)
     return {"valid_headers": [col for col in df.columns if df[col].notnull().any()]}
+
+
+from fastapi import APIRouter, HTTPException
+
+@router.get("/all")
+async def get_all_upload_ids():
+    # Use MongoDB's distinct() to get unique upload_id values
+    upload_ids = dataset_collection.distinct("upload_id")
+
+    if not upload_ids:
+        return {"upload_ids": []}
+
+    return {"upload_ids": upload_ids}
+
