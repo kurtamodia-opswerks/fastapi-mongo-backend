@@ -1,6 +1,7 @@
 import uuid
 import pandas as pd
 from fastapi import APIRouter, UploadFile, File, HTTPException
+from lib.utils import generate_short_uuid
 from schemas.dataset import Dataset
 from models.dataset import dataset_collection
 from serializers.dataset import all_data
@@ -25,7 +26,7 @@ async def upload_dataset(file: UploadFile = File(...)):
                 df[col] = None
         df = df[EXPECTED_COLUMNS].where(pd.notnull(df), None)
 
-        upload_id = f"upload_{uuid.uuid4().hex}"
+        upload_id = f"{generate_short_uuid()}"
         records = df.to_dict(orient="records")
         for idx, record in enumerate(records, start=1):
             record["upload_id"] = upload_id
