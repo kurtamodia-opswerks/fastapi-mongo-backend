@@ -2,7 +2,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 class AggregateRequest(BaseModel):
-    upload_id: str
+    upload_id: Optional[str] = None
     x_axis: str
     y_axis: str
     agg_func: str = "sum"

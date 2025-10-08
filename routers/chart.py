@@ -13,7 +13,10 @@ async def aggregate(request: AggregateRequest):
     if request.agg_func not in funcs:
         raise HTTPException(status_code=400, detail=f"Invalid agg_func. Choose from {list(funcs.keys())}")
 
-    match_stage = {"upload_id": request.upload_id}
+    match_stage = {}
+    if request.upload_id:
+        match_stage["upload_id"] = request.upload_id
+
     if request.year_from or request.year_to:
         match_stage["year"] = {}
         if request.year_from:
