@@ -8,9 +8,20 @@ from serializers.dataset import all_data
 
 router = APIRouter(prefix="/dataset", tags=["Dataset"])
 
-EXPECTED_COLUMNS = ["model", "year", "region", "color", 
-                    "transmission", "mileage_km", "price_usd", "sales_volume"]
+EXPECTED_COLUMNS = [
+    "model",
+    "year",
+    "region",
+    "color",
+    "transmission",
+    "mileage_km",
+    "price_usd",
+    "sales_volume",
+]
 
+# -----------------------------
+# 1️⃣ Upload CSV dataset
+# -----------------------------
 @router.post("/upload")
 async def upload_dataset(file: UploadFile = File(...)):
     """Handles CSV upload and validation"""
@@ -21,6 +32,7 @@ async def upload_dataset(file: UploadFile = File(...)):
         df = df[[col for col in df.columns if col in col_map]]
         df = df.rename(columns=col_map)
 
+        # Add missing columns as None
         for col in EXPECTED_COLUMNS:
             if col not in df.columns:
                 df[col] = None
@@ -28,52 +40,96 @@ async def upload_dataset(file: UploadFile = File(...)):
 
         upload_id = f"{generate_short_uuid()}"
         records = df.to_dict(orient="records")
+
         for idx, record in enumerate(records, start=1):
             record["upload_id"] = upload_id
             record["row_id"] = idx
 
-        valid_records = []
-        for rec in records:
-            dataset = Dataset(**rec)
-            valid_records.append(dataset.dict())
+        valid_records = [Dataset(**rec).dict() for rec in records]
 
         if valid_records:
             dataset_collection.insert_many(valid_records)
 
-        return {"message": "CSV uploaded successfully", "upload_id": upload_id, "rows_inserted": len(valid_records)}
+        return {
+            "message": "CSV uploaded successfully",
+            "upload_id": upload_id,
+            "rows_inserted": len(valid_records),
+        }
+
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/{upload_id}/contents")
-async def get_datasets(upload_id: str):
-    """Returns all contents for a given upload_id"""
-    query = {"upload_id": upload_id}
-    records = list(dataset_collection.find(query, {"_id": 0}))
+# -----------------------------
+# 3️⃣ Get all upload IDs
+# -----------------------------
+@router.get("/all")
+async def get_all_upload_ids():
+    """Returns all unique upload_id values"""
+    upload_ids = dataset_collection.distinct("upload_id")
+    return {"upload_ids": upload_ids or []}
+
+
+# -----------------------------
+# 2️⃣ Get all data (aggregated mode)
+# -----------------------------
+@router.get("/all/data")
+async def get_all_data():
+    """Returns all records across all uploads"""
+    records = list(dataset_collection.find({}, {"_id": 0}))
     if not records:
         raise HTTPException(status_code=404, detail="No records found")
     return all_data(records)
 
 
+# -----------------------------
+# 4️⃣ Get all headers across all datasets (no pandas)
+# -----------------------------
+@router.get("/all/headers")
+async def get_all_headers():
+    """Returns all unique headers across all datasets (no pandas)"""
+    records = list(dataset_collection.find({}, {"_id": 0}))
+    if not records:
+        raise HTTPException(status_code=404, detail="No records found")
+
+    # Collect all keys that have at least one non-null value
+    valid_headers = set()
+    for record in records:
+        for key, value in record.items():
+            if value not in (None, "", [], {}):
+                valid_headers.add(key)
+
+    return {"valid_headers": sorted(valid_headers)}
+
+
+# -----------------------------
+# 5️⃣ Get dataset contents (per upload_id)
+# -----------------------------
+@router.get("/{upload_id}/data")
+async def get_dataset_contents(upload_id: str):
+    """Returns all records for a specific upload_id"""
+    query = {"upload_id": upload_id}
+    records = list(dataset_collection.find(query, {"_id": 0}))
+    if not records:
+        raise HTTPException(status_code=404, detail="No records found for this upload_id")
+    return all_data(records)
+
+
+# -----------------------------
+# 6️⃣ Get dataset headers (per upload_id, no pandas)
+# -----------------------------
 @router.get("/{upload_id}/headers")
 async def get_headers(upload_id: str):
-    """Returns all headers for a given upload_id"""
+    """Returns all headers for a given upload_id (no pandas)"""
     query = {"upload_id": upload_id}
     records = list(dataset_collection.find(query, {"_id": 0}))
     if not records:
         raise HTTPException(status_code=404, detail="No records found")
-    df = pd.DataFrame(records)
-    return {"valid_headers": [col for col in df.columns if df[col].notnull().any()]}
 
+    valid_headers = set()
+    for record in records:
+        for key, value in record.items():
+            if value not in (None, "", [], {}):
+                valid_headers.add(key)
 
-@router.get("/all")
-async def get_all_upload_ids():
-    """Returns all unique upload_id values"""
-    # Use MongoDB's distinct() to get unique upload_id values
-    upload_ids = dataset_collection.distinct("upload_id")
-
-    if not upload_ids:
-        return {"upload_ids": []}
-
-    return {"upload_ids": upload_ids}
-
+    return {"valid_headers": sorted(valid_headers)}
