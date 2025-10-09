@@ -1,9 +1,11 @@
 from fastapi import APIRouter, HTTPException
 from schemas.dashboard import Dashboard
 from models.dashboard import dashboards_collection
+from models.chart import charts_collection
 from bson.objectid import ObjectId
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
+
 
 # ================================================
 # Add or update a dashboard
@@ -11,56 +13,99 @@ router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 @router.post("/add")
 async def add_to_dashboard(request: Dashboard):
     """
-    Adds charts to a dashboard. If a dashboard with the same mode and upload_id exists, it updates it.
-    Otherwise, it creates a new dashboard.
+    Add a chart ID to an existing dashboard (based on mode + upload_id).
+    If no dashboard exists, create a new one with this chart.
     """
-    existing = dashboards_collection.find_one({"mode": request.mode, "upload_id": request.upload_id})
+    existing = dashboards_collection.find_one({
+        "mode": request.mode,
+        "upload_id": request.upload_id,
+    })
 
     if existing:
-        # Merge charts without duplicates (based on chart name)
-        existing_chart_names = {c.get("name") for c in existing.get("charts", [])}
-        new_charts = [chart.dict() for chart in request.charts if chart.name not in existing_chart_names]
+        # Only add the chart if it's not already in the dashboard
+        dashboards_collection.update_one(
+            {"_id": existing["_id"]},
+            {"$addToSet": {"charts": request.chart_id}}  
+        )
+        return {
+            "message": "Chart added to existing dashboard successfully",
+            "dashboard_id": str(existing["_id"]),
+        }
 
-        if new_charts:
-            dashboards_collection.update_one(
-                {"_id": existing["_id"]},
-                {"$push": {"charts": {"$each": new_charts}}}
-            )
-        return {"message": "Dashboard updated successfully", "dashboard_id": str(existing["_id"])}
     else:
-        result = dashboards_collection.insert_one(request.dict())
-        return {"message": "Dashboard created successfully", "dashboard_id": str(result.inserted_id)}
-    
+        # Create a new dashboard with the chart
+        new_dashboard = {
+            "mode": request.mode,
+            "upload_id": request.upload_id,
+            "charts": [request.chart_id],
+        }
+        result = dashboards_collection.insert_one(new_dashboard)
+        return {
+            "message": "New dashboard created successfully",
+            "dashboard_id": str(result.inserted_id),
+        }
 
 
 # ================================================
-# Get a dashboard
+# Get a dashboard + populated charts
 # ================================================
 @router.get("/{mode}/{upload_id}")
-async def get_dashboard(mode: str, upload_id: str):
-    """Fetch a dashboard for a given mode and upload_id"""
-    dashboard = dashboards_collection.find_one({"mode": mode, "upload_id": upload_id})
+async def get_dashboard(mode: str, upload_id: str = None):
+    """
+    Fetch a dashboard for a given mode and upload_id (which may be null),
+    and populate chart details automatically.
+    """
+    query = {"mode": mode}
+
+    # Handle cases where upload_id is "null" or "undefined" from frontend
+    if upload_id in (None, "null", "undefined", ""):
+        query["upload_id"] = None
+    else:
+        query["upload_id"] = upload_id
+
+    dashboard = dashboards_collection.find_one(query)
     if not dashboard:
         raise HTTPException(status_code=404, detail="Dashboard not found")
+
     dashboard["_id"] = str(dashboard["_id"])
+
+    # --- Populate chart details ---
+    chart_ids = dashboard.get("charts", [])
+    if chart_ids:
+        try:
+            chart_objects = list(
+                charts_collection.find({
+                    "_id": {"$in": [ObjectId(cid) for cid in chart_ids if ObjectId.is_valid(cid)]}
+                })
+            )
+            # Convert ObjectId fields to string
+            for chart in chart_objects:
+                chart["_id"] = str(chart["_id"])
+
+            dashboard["charts"] = chart_objects
+        except Exception:
+            dashboard["charts"] = []
+
     return dashboard
+
+
 
 # ================================================
 # Delete a chart from a dashboard
 # ================================================
-@router.delete("/{dashboard_id}/{chart_name}")
-async def delete_chart_from_dashboard(dashboard_id: str, chart_name: str):
-    """Remove a specific chart from a dashboard by chart name"""
+@router.delete("/{dashboard_id}/{chart_id}")
+async def delete_chart_from_dashboard(dashboard_id: str, chart_id: str):
+    """Remove a specific chart ID from a dashboard"""
     dashboard = dashboards_collection.find_one({"_id": ObjectId(dashboard_id)})
     if not dashboard:
         raise HTTPException(status_code=404, detail="Dashboard not found")
 
     result = dashboards_collection.update_one(
         {"_id": ObjectId(dashboard_id)},
-        {"$pull": {"charts": {"name": chart_name}}}
+        {"$pull": {"charts": chart_id}}
     )
 
     if result.modified_count == 0:
         raise HTTPException(status_code=404, detail="Chart not found in dashboard")
 
-    return {"message": f"Chart '{chart_name}' removed from dashboard"}
+    return {"message": f"Chart '{chart_id}' removed from dashboard"}

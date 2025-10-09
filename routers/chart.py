@@ -46,6 +46,33 @@ async def save_chart(request: Chart):
     return {"message": "Chart saved successfully", "chart_id": str(result.inserted_id)}
 
 
+@router.put("/update/{chart_id}")
+async def update_chart(chart_id: str, request: Chart):
+    """Updates an existing chart by its ID"""
+    try:
+        obj_id = ObjectId(chart_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid chart ID")
+
+    # Check if chart exists
+    existing_chart = charts_collection.find_one({"_id": obj_id})
+    if not existing_chart:
+        raise HTTPException(status_code=404, detail="Chart not found")
+
+    # Update only provided fields (non-null ones)
+    update_data = {k: v for k, v in request.dict().items() if v is not None}
+
+    result = charts_collection.update_one(
+        {"_id": obj_id},
+        {"$set": update_data}
+    )
+
+    if result.modified_count == 0:
+        return {"message": "No changes made to chart"}
+
+    return {"message": "Chart updated successfully", "chart_id": chart_id}
+
+
 @router.get("/saved/all")
 async def get_all_saved_charts():
     """Returns all saved charts"""
