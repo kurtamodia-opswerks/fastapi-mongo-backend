@@ -46,6 +46,15 @@ async def save_chart(request: Chart):
     return {"message": "Chart saved successfully", "chart_id": str(result.inserted_id)}
 
 
+@router.get("/saved/all")
+async def get_all_saved_charts():
+    """Returns all saved charts"""
+    charts = list(charts_collection.find({"mode": "aggregated"}, {"_id": 1, "name": 1, "chart_type": 1, "x_axis": 1, "y_axis": 1, "agg_func": 1, "year_from": 1, "year_to": 1}))
+    for chart in charts:
+        chart["_id"] = str(chart["_id"])
+    return charts
+
+
 @router.get("/saved/{upload_id}")
 async def get_saved_charts(upload_id: str):
     """Returns all saved charts for a given upload_id"""

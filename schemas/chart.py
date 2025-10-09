@@ -11,6 +11,7 @@ class AggregateRequest(BaseModel):
 
 
 class Chart(BaseModel):
+    mode: str
     upload_id: Optional[str] = None
     chart_type: str
     x_axis: str
