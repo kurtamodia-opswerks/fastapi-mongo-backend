@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from schemas.dashboard import Dashboard
+from schemas.dashboard import Dashboard, DashboardUpdate
 from models.dashboard import dashboards_collection
 from models.chart import charts_collection
 from bson.objectid import ObjectId
@@ -38,6 +38,8 @@ async def add_to_dashboard(request: Dashboard):
             "mode": request.mode,
             "upload_id": request.upload_id,
             "charts": [request.chart_id],
+            "year_from": None,
+            "year_to": None,
         }
         result = dashboards_collection.insert_one(new_dashboard)
         return {
@@ -86,7 +88,12 @@ async def get_dashboard(mode: str, upload_id: str = None):
         except Exception:
             dashboard["charts"] = []
 
-    return dashboard
+    return {
+        **dashboard,
+        "year_from": dashboard.get("year_from"),
+        "year_to": dashboard.get("year_to"),
+    }
+
 
 
 
@@ -109,3 +116,31 @@ async def delete_chart_from_dashboard(dashboard_id: str, chart_id: str):
         raise HTTPException(status_code=404, detail="Chart not found in dashboard")
 
     return {"message": f"Chart '{chart_id}' removed from dashboard"}
+
+
+# ================================================
+# Update dashboard date range
+# ================================================
+@router.put("/{dashboard_id}/date-range")
+async def update_dashboard_date_range(dashboard_id: str, request: DashboardUpdate):
+    """Update the year_from and year_to of a dashboard"""
+    update_data = {}
+
+    if request.year_from is not None:
+        update_data["year_from"] = request.year_from
+    if request.year_to is not None:
+        update_data["year_to"] = request.year_to
+
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No valid fields to update")
+
+    result = dashboards_collection.update_one(
+        {"_id": ObjectId(dashboard_id)},
+        {"$set": update_data}
+    )
+
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Dashboard not found")
+
+    return {"message": "Dashboard date range updated successfully"}
+
