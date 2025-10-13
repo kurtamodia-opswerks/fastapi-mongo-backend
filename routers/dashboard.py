@@ -67,7 +67,7 @@ async def get_dashboard(mode: str, upload_id: str = None):
 
     dashboard = dashboards_collection.find_one(query)
     if not dashboard:
-        raise HTTPException(status_code=404, detail="Dashboard not found")
+        return None
 
     dashboard["_id"] = str(dashboard["_id"])
 
