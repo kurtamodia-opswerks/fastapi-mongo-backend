@@ -99,3 +99,8 @@ async def get_chart(chart_id: str):
         raise HTTPException(status_code=404, detail="Chart not found")
     chart["_id"] = str(chart["_id"])
     return chart
+
+@router.delete("/delete/{chart_id}")
+async def remove_chart(chart_id: str):
+    charts_collection.delete_one({"_id": ObjectId(chart_id)})
+    return {"message": "Chart deleted successfully"}    
