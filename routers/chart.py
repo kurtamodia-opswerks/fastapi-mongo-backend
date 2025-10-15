@@ -104,3 +104,31 @@ async def get_chart(chart_id: str):
 async def remove_chart(chart_id: str):
     charts_collection.delete_one({"_id": ObjectId(chart_id)})
     return {"message": "Chart deleted successfully"}    
+
+
+# --- Year Range ---
+@router.get("/year-range")
+async def get_year_range(upload_id: str | None = None):
+    """Returns the minimum and maximum year values available in the dataset"""
+    match_stage = {}
+    if upload_id:
+        match_stage["upload_id"] = upload_id
+
+    pipeline = [
+        {"$match": match_stage},
+        {
+            "$group": {
+                "_id": None,
+                "min_year": {"$min": "$year"},
+                "max_year": {"$max": "$year"}
+            }
+        },
+        {"$project": {"_id": 0, "min_year": 1, "max_year": 1}}
+    ]
+
+    result = list(dataset_collection.aggregate(pipeline))
+
+    if not result or result[0].get("min_year") is None:
+        raise HTTPException(status_code=404, detail="No year data found")
+
+    return result[0]
