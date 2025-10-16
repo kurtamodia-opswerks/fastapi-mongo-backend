@@ -19,9 +19,7 @@ EXPECTED_COLUMNS = [
     "sales_volume",
 ]
 
-# -----------------------------
-# 1️⃣ Upload CSV dataset
-# -----------------------------
+# Upload CSV
 @router.post("/upload")
 async def upload_dataset(file: UploadFile = File(...)):
     """Handles CSV upload and validation"""
@@ -60,9 +58,7 @@ async def upload_dataset(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# -----------------------------
-# 3️⃣ Get all upload IDs
-# -----------------------------
+# Get all unique upload_ids
 @router.get("/all")
 async def get_all_upload_ids():
     """Returns all unique upload_id values"""
@@ -70,9 +66,7 @@ async def get_all_upload_ids():
     return {"upload_ids": upload_ids or []}
 
 
-# -----------------------------
-# 2️⃣ Get all data (aggregated mode)
-# -----------------------------
+# Get all data across all uploads
 @router.get("/all/data")
 async def get_all_data():
     """Returns all records across all uploads"""
@@ -82,9 +76,7 @@ async def get_all_data():
     return all_data(records)
 
 
-# -----------------------------
-# 4️⃣ Get all headers across all datasets (no pandas)
-# -----------------------------
+# Get all unique headers
 @router.get("/all/headers")
 async def get_all_headers():
     """Returns all unique headers across all datasets (no pandas)"""
@@ -102,9 +94,8 @@ async def get_all_headers():
     return {"valid_headers": sorted(valid_headers)}
 
 
-# -----------------------------
-# 5️⃣ Get dataset contents (per upload_id)
-# -----------------------------
+
+# Get all dataset contents
 @router.get("/{upload_id}/data")
 async def get_dataset_contents(upload_id: str):
     """Returns all records for a specific upload_id"""
@@ -115,9 +106,7 @@ async def get_dataset_contents(upload_id: str):
     return all_data(records)
 
 
-# -----------------------------
-# 6️⃣ Get dataset headers (per upload_id, no pandas)
-# -----------------------------
+# Get all headers per upload
 @router.get("/{upload_id}/headers")
 async def get_headers(upload_id: str):
     """Returns all headers for a given upload_id (no pandas)"""

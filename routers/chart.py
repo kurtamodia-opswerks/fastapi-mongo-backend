@@ -9,10 +9,12 @@ router = APIRouter(prefix="/chart", tags=["Chart"])
 @router.post("/aggregate")
 async def aggregate(request: AggregateRequest):
     """Returns aggregated data based on the provided request parameters"""
+
     funcs = {"sum": "$sum", "avg": "$avg", "count": "$sum", "min": "$min", "max": "$max"}
     if request.agg_func not in funcs:
         raise HTTPException(status_code=400, detail=f"Invalid agg_func. Choose from {list(funcs.keys())}")
 
+    # Match Stage
     match_stage = {}
     if request.upload_id:
         match_stage["upload_id"] = request.upload_id
@@ -24,19 +26,96 @@ async def aggregate(request: AggregateRequest):
         if request.year_to:
             match_stage["year"]["$lte"] = int(request.year_to)
 
-    pipeline = [
-        {"$match": match_stage},
-        {"$group": {
-            "_id": f"${request.x_axis}",
-            request.y_axis: ({"$sum": 1} if request.agg_func == "count" else {funcs[request.agg_func]: f"${request.y_axis}"})
-        }},
-        {"$project": {request.x_axis: "$_id", request.y_axis: f"${request.y_axis}", "_id": 0}},
-        {"$sort": {request.x_axis: 1}}
-    ]
+    # Detect continuous fields
+    sample_docs = list(dataset_collection.find(match_stage, {request.x_axis: 1, request.y_axis: 1}).limit(100))
+
+    def is_continuous(field):
+        """Heuristic: numeric and has many unique values"""
+        values = [d.get(field) for d in sample_docs if isinstance(d.get(field), (int, float))]
+        if not values:
+            return False
+        unique_count = len(set(values))
+        return unique_count > 15  
+
+    x_is_continuous = is_continuous(request.x_axis)
+    y_is_continuous = is_continuous(request.y_axis)
+
+    # Aggregate
+    if x_is_continuous and y_is_continuous:
+        # Both continuous: use bucketAuto for trend data
+        pipeline = [
+            {"$match": match_stage},
+            {
+                "$bucketAuto": {
+                    "groupBy": f"${request.x_axis}",
+                    "buckets": 20,
+                    "output": {
+                        f"avg_{request.y_axis}": {"$avg": f"${request.y_axis}"},
+                        "count": {"$sum": 1},
+                    },
+                }
+            },
+            {"$project": {
+                "x_range_min": "$_id.min",
+                "x_range_max": "$_id.max",
+                f"avg_{request.y_axis}": 1,
+                "count": 1,
+                "_id": 0
+            }},
+            {"$sort": {"x_range_min": 1}}
+        ]
+
+    elif x_is_continuous:
+        # Continuous x, categorical y: bucket x and aggregate y
+        pipeline = [
+            {"$match": match_stage},
+            {
+                "$bucketAuto": {
+                    "groupBy": f"${request.x_axis}",
+                    "buckets": 20,
+                    "output": {
+                        f"{request.y_axis}": (
+                            {"$sum": 1}
+                            if request.agg_func == "count"
+                            else {funcs[request.agg_func]: f"${request.y_axis}"}
+                        ),
+                        "count": {"$sum": 1},
+                    },
+                }
+            },
+            {"$project": {
+                "x_range_min": "$_id.min",
+                "x_range_max": "$_id.max",
+                f"{request.y_axis}": 1,
+                "count": 1,
+                "_id": 0
+            }},
+            {"$sort": {"x_range_min": 1}}
+        ]
+
+    else:
+        # Default: categorical grouping
+        pipeline = [
+            {"$match": match_stage},
+            {"$group": {
+                "_id": f"${request.x_axis}",
+                request.y_axis: (
+                    {"$sum": 1}
+                    if request.agg_func == "count"
+                    else {funcs[request.agg_func]: f"${request.y_axis}"}
+                )
+            }},
+            {"$project": {request.x_axis: "$_id", request.y_axis: f"${request.y_axis}", "_id": 0}},
+            {"$sort": {request.x_axis: 1}},
+        ]
+
     result = list(dataset_collection.aggregate(pipeline))
+
     if not result:
         raise HTTPException(status_code=404, detail="No records found")
+
     return result
+
 
 
 @router.post("/save")

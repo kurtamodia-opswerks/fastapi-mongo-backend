@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from routers import chart, dataset, dashboard
+from routers import chart, dataset, dashboard, schema_less
 
 app = FastAPI(title="Dataset API", version="1.0")
 
@@ -26,6 +26,7 @@ app.add_middleware(
 app.include_router(dataset.router, prefix="/api")
 app.include_router(chart.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
+app.include_router(schema_less.router, prefix="/api")
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
