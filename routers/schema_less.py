@@ -1,5 +1,6 @@
 import pandas as pd
-from fastapi import APIRouter, Query, UploadFile, File, HTTPException
+import numpy as np
+from fastapi import APIRouter, UploadFile, File, HTTPException
 from pymongo import ASCENDING
 from lib.utils import generate_short_uuid
 from models.schema_less import schema_less_collection
@@ -13,6 +14,13 @@ async def upload_dataset(file: UploadFile = File(...)):
     try:
         df = pd.read_csv(file.file)
         df.columns = [col.strip().lower() for col in df.columns]
+
+        df = df.apply(pd.to_numeric, errors='ignore')
+
+        df = df.replace([np.inf, -np.inf], np.nan)
+
+        df = df.replace({pd.NA: None, np.nan: None})
+
         upload_id = f"{generate_short_uuid()}"
         records = df.to_dict(orient="records")
 
@@ -20,6 +28,20 @@ async def upload_dataset(file: UploadFile = File(...)):
             record["upload_id"] = upload_id
             record["row_id"] = idx
 
+        def is_convertible_to_number(value:str):
+            try:
+                float(value)
+                return True
+            except ValueError:
+                return False
+            
+
+        for record in records:
+            for key, value in record.items():
+                if value and is_convertible_to_number(value):
+                    record[key] = float(value)
+                elif value == None:
+                    record[key] = ""
 
         schema_less_collection.insert_many(records)
 
