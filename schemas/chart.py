@@ -20,3 +20,4 @@ class Chart(BaseModel):
     year_from: Optional[int] = None
     year_to: Optional[int] = None
     name: Optional[str] = None
+    chart_library: str
