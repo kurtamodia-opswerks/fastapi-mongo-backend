@@ -1,8 +1,9 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from routers import chart, dataset, dashboard, schema_less
+from lib.ws_manager import manager
 
 app = FastAPI(title="Dataset API", version="1.0")
 
@@ -27,6 +28,15 @@ app.include_router(dataset.router, prefix="/api")
 app.include_router(chart.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
 app.include_router(schema_less.router, prefix="/api")
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text() 
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):

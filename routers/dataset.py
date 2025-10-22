@@ -7,6 +7,7 @@ from schemas.dataset import Dataset
 from models.dataset import dataset_collection
 from models.dataset_metadata import dataset_metadata_collection
 from serializers.dataset import all_data
+from lib.ws_manager import manager
 
 router = APIRouter(prefix="/dataset", tags=["Dataset"])
 
@@ -59,6 +60,9 @@ async def upload_dataset(file: UploadFile = File(...)):
             "created_at": pd.Timestamp.now().isoformat()
         })
 
+        # Broadcast to all clients that a new dataset was uploaded
+        await manager.broadcast(f"dataset_uploaded:{upload_id}")
+
         return {
             "message": "CSV uploaded successfully",
             "upload_id": upload_id,
@@ -96,7 +100,7 @@ async def get_all_headers():
     if not records:
         raise HTTPException(status_code=404, detail="No records found")
 
-    ignored_columns = {"upload_id", "row_id"}
+    ignored_columns = {}
 
     # Collect all keys that have at least one non-null value
     valid_headers = set()
@@ -155,7 +159,7 @@ async def get_headers(upload_id: str):
     if not records:
         raise HTTPException(status_code=404, detail="No records found")
 
-    ignored_columns = {"upload_id", "row_id"}
+    ignored_columns = {}
 
     valid_headers = set()
     for record in records:

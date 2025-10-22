@@ -116,7 +116,6 @@ async def schemaless_aggregate(request: SchemalessAggregateRequest):
     x_axis = request.x_axis
     y_axis = request.y_axis
     agg_func = request.agg_func
-    buckets = request.buckets
 
 
     funcs = {"sum": "$sum", "avg": "$avg", "count": "$sum", "min": "$min", "max": "$max"}
@@ -125,86 +124,20 @@ async def schemaless_aggregate(request: SchemalessAggregateRequest):
 
     match_stage = {"upload_id": upload_id}
 
-    # --- Detect continuous vs categorical fields ---
-    sample_docs = list(schema_less_collection.find(match_stage, {x_axis: 1, y_axis: 1}).limit(100))
 
-    def is_continuous(field: str) -> bool:
-        values = [d.get(field) for d in sample_docs if isinstance(d.get(field), (int, float))]
-        if not values:
-            return False
-        return len(set(values)) > 15  # heuristic threshold
-
-    x_is_continuous = is_continuous(x_axis)
-    y_is_continuous = is_continuous(y_axis)
-
-    # --- Build aggregation pipeline ---
-    if x_is_continuous and y_is_continuous:
-        # Trend-type bucket aggregation
-        pipeline = [
-            {"$match": match_stage},
-            {
-                "$bucketAuto": {
-                    "groupBy": f"${x_axis}",
-                    "buckets": buckets,
-                    "output": {
-                        f"avg_{y_axis}": {"$avg": f"${y_axis}"},
-                        "count": {"$sum": 1},
-                    },
-                }
-            },
-            {"$project": {
-                "x_range_min": "$_id.min",
-                "x_range_max": "$_id.max",
-                f"avg_{y_axis}": 1,
-                "count": 1,
-                "_id": 0,
-            }},
-            {"$sort": {"x_range_min": ASCENDING}},
-        ]
-
-    elif x_is_continuous:
-        # Continuous X, categorical Y
-        pipeline = [
-            {"$match": match_stage},
-            {
-                "$bucketAuto": {
-                    "groupBy": f"${x_axis}",
-                    "buckets": buckets,
-                    "output": {
-                        f"{y_axis}": (
-                            {"$sum": 1}
-                            if agg_func == "count"
-                            else {funcs[agg_func]: f"${y_axis}"}
-                        ),
-                        "count": {"$sum": 1},
-                    },
-                }
-            },
-            {"$project": {
-                "x_range_min": "$_id.min",
-                "x_range_max": "$_id.max",
-                f"{y_axis}": 1,
-                "count": 1,
-                "_id": 0,
-            }},
-            {"$sort": {"x_range_min": ASCENDING}},
-        ]
-
-    else:
-        # Both categorical — simple group
-        pipeline = [
-            {"$match": match_stage},
-            {"$group": {
-                "_id": f"${x_axis}",
-                y_axis: (
-                    {"$sum": 1}
-                    if agg_func == "count"
-                    else {funcs[agg_func]: f"${y_axis}"}
-                ),
-            }},
-            {"$project": {x_axis: "$_id", y_axis: f"${y_axis}", "_id": 0}},
-            {"$sort": {x_axis: ASCENDING}},
-        ]
+    pipeline = [
+        {"$match": match_stage},
+        {"$group": {
+            "_id": f"${x_axis}",
+            y_axis: (
+                {"$sum": 1}
+                if agg_func == "count"
+                else {funcs[agg_func]: f"${y_axis}"}
+            ),
+        }},
+        {"$project": {x_axis: "$_id", y_axis: f"${y_axis}", "_id": 0}},
+        {"$sort": {x_axis: ASCENDING}},
+    ]
 
     # --- Execute and return ---
     try:

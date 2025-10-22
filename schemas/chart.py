@@ -21,3 +21,4 @@ class Chart(BaseModel):
     year_to: Optional[int] = None
     name: Optional[str] = None
     chart_library: str
+    shareable: Optional[bool] = False

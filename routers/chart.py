@@ -91,6 +91,14 @@ async def get_all_saved_charts():
         chart["_id"] = str(chart["_id"])
     return charts
 
+@router.get("/shared/all")
+async def get_shared_chart_ids():
+    """Returns all chart IDs where shareable=True"""
+    charts = list(charts_collection.find({"shareable": True}, {"_id": 1, "name": 1, "chart_type": 1, "x_axis": 1, "y_axis": 1, "agg_func": 1, "year_from": 1, "year_to": 1}))
+    for chart in charts:
+        chart["_id"] = str(chart["_id"])
+    return charts
+
 
 @router.get("/saved/{upload_id}")
 async def get_saved_charts(upload_id: str):
