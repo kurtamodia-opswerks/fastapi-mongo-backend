@@ -82,7 +82,7 @@ async def get_headers(upload_id: str):
     if not records:
         raise HTTPException(status_code=404, detail="No records found")
 
-    ignored_columns = {"upload_id", "row_id"}
+    ignored_columns = {}
 
     valid_headers = set()
     for record in records:
