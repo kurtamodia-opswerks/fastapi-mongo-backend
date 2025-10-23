@@ -33,11 +33,17 @@ async def upload_dataset(file: UploadFile = File(...)):
         df = df[[col for col in df.columns if col in col_map]]
         df = df.rename(columns=col_map)
 
+        num_duplicates = int(df.duplicated().sum())
+
+        # Drop duplicate rows (keep the first occurrence)
+        df = df.drop_duplicates(subset=EXPECTED_COLUMNS, keep="first")
+
         # Add missing columns as None
         for col in EXPECTED_COLUMNS:
             if col not in df.columns:
                 df[col] = None
         df = df[EXPECTED_COLUMNS].where(pd.notnull(df), None)
+
 
         upload_id = generate_short_uuid()
         records = df.to_dict(orient="records")
@@ -68,6 +74,7 @@ async def upload_dataset(file: UploadFile = File(...)):
             "upload_id": upload_id,
             "rows_inserted": len(valid_records),
             "column_types": column_types,
+            "num_duplicates": num_duplicates
         }
 
     except Exception as e:
