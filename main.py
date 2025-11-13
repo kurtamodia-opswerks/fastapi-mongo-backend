@@ -2,7 +2,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from routers import chart, dataset, dashboard, schema_less
+from routers import chart, dataset, dashboard, schema_less, user
 from lib.ws_manager import manager
 
 app = FastAPI(title="Dataset API", version="1.0")
@@ -24,6 +24,7 @@ app.add_middleware(
 )
 
 # include routers
+app.include_router(user.router, prefix="/api")
 app.include_router(dataset.router, prefix="/api")
 app.include_router(chart.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
