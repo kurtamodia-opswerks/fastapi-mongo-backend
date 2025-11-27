@@ -2,7 +2,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from routers import chart, dataset, dashboard, schema_less, user
+from routers import chart, dataset, dashboard, schema_less, user, parquet
 from lib.ws_manager import manager
 
 app = FastAPI(title="Dataset API", version="1.0")
@@ -29,6 +29,7 @@ app.include_router(dataset.router, prefix="/api")
 app.include_router(chart.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
 app.include_router(schema_less.router, prefix="/api")
+app.include_router(parquet.router, prefix="/api")
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
