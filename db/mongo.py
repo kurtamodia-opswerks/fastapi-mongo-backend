@@ -10,12 +10,13 @@ load_dotenv()
 
 username = os.getenv("MONGO_DB_USERNAME")
 password = os.getenv("MONGO_DB_PASSWORD")
-url = os.getenv("MONGO_DB_URL")
+host = os.getenv("MONGO_DB_HOST")
+port = os.getenv("MONGO_DB_PORT")
 
 # Encode password in case it contains special characters like * or @
 encoded_password = urllib.parse.quote_plus(password)
 
-uri = f"mongodb+srv://{username}:{encoded_password}@{url}"
+uri = f"mongodb://{username}:{encoded_password}@{host}:{port}"
 
 try:
     client = MongoClient(uri, server_api=ServerApi("1"))
