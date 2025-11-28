@@ -1,89 +1,114 @@
 import pandas as pd
 from fastapi import APIRouter, UploadFile, File, HTTPException
-from lib.utils import generate_short_uuid
+from lib.utils import generate_short_uuid, _create_row_hash, _get_columns_from_schema
 from models.parquet import parquet_collection
-import hashlib
-import json
 
 from schemas.parquet import ChartDataRequest
 
 router = APIRouter(prefix="/parquet", tags=["Parquet"])
 
-# Upload Parquet
+# --- Main Upload Endpoint ---
+
 @router.post("/upload")
 async def upload_parquet(file: UploadFile = File(...)):
-    """Handles Parquet upload, checks for duplicates, and saves new dataset"""
+    """
+    Handles Parquet upload, checks for duplicates, and saves new dataset.
+    If an identical dataset is uploaded, it returns the existing upload_id.
+    """
     try:
-        print("[DEBUG] Entered upload_parquet function.")
         if not file.filename.endswith('.parquet'):
-            print(f"[DEBUG] File validation failed: {file.filename}")
             raise HTTPException(status_code=400, detail="Invalid file type. Please upload a .parquet file.")
-        
-        print(f"[DEBUG] File validation successful for: {file.filename}")
 
-        print("[DEBUG] Attempting to read parquet file with pandas...")
         df = pd.read_parquet(file.file)
-        print(f"[DEBUG] Successfully read parquet file. DataFrame shape: {df.shape}")
-
-        # --- Duplicate Handling Logic ---
 
         # Drop duplicates within the uploaded file itself
         initial_rows = len(df)
         df.drop_duplicates(inplace=True)
         duplicates_in_file = initial_rows - len(df)
-        print(f"[DEBUG] Dropped {duplicates_in_file} duplicates from within the uploaded file.")
+
+        if df.empty:
+            return {
+                "message": "File is empty or all rows were duplicates within the file.",
+                "upload_id": None,
+                "rows_inserted": 0,
+                "duplicates_found_in_file": duplicates_in_file,
+                "duplicates_found_in_db": 0,
+                "columns": []
+            }
 
         # Check for duplicates against the database using a content hash
-        duplicates_in_db = 0
-        if not df.empty:
-            # Function to create a consistent hash for a row
-            def create_row_hash(row):
-                serialized_row = json.dumps(row.to_dict(), sort_keys=True, default=str)
-                return hashlib.sha256(serialized_row.encode()).hexdigest()
-
-            df['_hash'] = df.apply(create_row_hash, axis=1)
-
-            print("[DEBUG] Fetching existing record hashes from the database.")
-            existing_hashes = {doc['_hash'] for doc in parquet_collection.find({}, {"_hash": 1}) if '_hash' in doc}
-            print(f"[DEBUG] Found {len(existing_hashes)} existing hashes.")
-
-            original_record_count = len(df)
-            df = df[~df['_hash'].isin(existing_hashes)]
-            duplicates_in_db = original_record_count - len(df)
-            print(f"[DEBUG] Found {duplicates_in_db} records that already exist in the DB. They will be ignored.")
+        df['_hash'] = df.apply(_create_row_hash, axis=1)
         
-        # --- End of Duplicate Handling ---
+        existing_hashes = {doc['_hash'] for doc in parquet_collection.find({}, {"_hash": 1}) if '_hash' in doc}
+        
+        df_new = df[~df['_hash'].isin(existing_hashes)]
+        duplicates_in_db = len(df) - len(df_new)
 
-        # Generate a unique ID for this upload
-        upload_id = generate_short_uuid()
+        # Handle different upload scenarios
+        # Scenario A: All rows in the file are duplicates of existing ones in the DB
+        if df_new.empty:
+            print("[DEBUG] All rows are duplicates of existing DB records. Checking for a common upload_id.")
+            
+            # Find all upload_ids associated with the hashes from the uploaded file
+            duplicate_hashes = list(df['_hash'])
+            matching_docs = parquet_collection.find(
+                {'_hash': {'$in': duplicate_hashes}},
+                {'_id': 0, 'upload_id': 1}
+            )
+            found_ids = {doc['upload_id'] for doc in matching_docs if 'upload_id' in doc}
 
-        # Get records from the de-duplicated dataframe
-        records = df.to_dict(orient="records")
+            # If all duplicates belong to a SINGLE previous upload, return that ID
+            if len(found_ids) == 1:
+                existing_upload_id = found_ids.pop()
+                first_doc = parquet_collection.find_one({"upload_id": existing_upload_id})
+                columns = _get_columns_from_schema(first_doc) if first_doc else []
+                
+                print(f"[DEBUG] Found a single matching upload_id: {existing_upload_id}")
+                return {
+                    "message": "This file is an exact duplicate of a previous upload.",
+                    "upload_id": existing_upload_id,
+                    "rows_inserted": 0,
+                    "duplicates_found_in_file": duplicates_in_file,
+                    "duplicates_found_in_db": duplicates_in_db,
+                    "columns": columns,
+                    "status": "duplicate"
+                }
+            else:
+                # This is the "mix tape" scenario.
+                print(f"[DEBUG] Found {len(found_ids)} matching upload_ids. No single source.")
+                return {
+                    "message": "File contains a mix of records from multiple existing datasets. No new data was inserted.",
+                    "upload_id": None,
+                    "rows_inserted": 0,
+                    "duplicates_found_in_file": duplicates_in_file,
+                    "duplicates_found_in_db": duplicates_in_db,
+                    "columns": [col for col in df.columns if col != '_hash']
+                }
 
-        # Add upload_id to each new record before insertion
-        for record in records:
-            record["upload_id"] = upload_id
+        # Scenario B: There are new, unique rows to insert
+        else:
+            upload_id = generate_short_uuid()
+            records = df_new.to_dict(orient="records")
 
-        if records:
-            print(f"[DEBUG] Attempting to insert {len(records)} new records into MongoDB...")
+            for record in records:
+                record["upload_id"] = upload_id
+
+            print(f"[DEBUG] Attempting to insert {len(records)} new records with upload_id: {upload_id}")
             parquet_collection.insert_many(records)
             print("[DEBUG] Successfully inserted new records.")
 
-        # Get the list of columns to return, excluding the internal hash
-        columns_to_return = [col for col in df.columns if col != '_hash']
-
-        return {
-            "message": "Parquet file processed successfully.",
-            "upload_id": upload_id,
-            "rows_inserted": len(records),
-            "duplicates_found_in_file": duplicates_in_file,
-            "duplicates_found_in_db": duplicates_in_db,
-            "columns": columns_to_return
-        }
+            return {
+                "message": "Parquet file processed successfully.",
+                "upload_id": upload_id,
+                "rows_inserted": len(records),
+                "duplicates_found_in_file": duplicates_in_file,
+                "duplicates_found_in_db": duplicates_in_db,
+                "columns": [col for col in df.columns if col != '_hash']
+            }
 
     except Exception as e:
         print(f"[DEBUG] An exception occurred: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {e}")
     
 
 

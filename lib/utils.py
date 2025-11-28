@@ -1,7 +1,9 @@
 import uuid
 import pandas as pd
 import numpy as np
-from typing import Literal, Dict
+import hashlib
+import json
+from typing import Literal, Dict, Any
 
 # shorter UUID format: xxxx-xxxx-xxxx
 def generate_short_uuid():
@@ -37,3 +39,14 @@ def detect_column_type(series: pd.Series) -> FieldType:
         return "boolean"
 
     return "categorical"
+
+# --- Helper Functions for Parquet File Processing ---
+
+def _create_row_hash(row: pd.Series) -> str:
+    """Creates a consistent SHA256 hash for a DataFrame row."""
+    serialized_row = json.dumps(row.to_dict(), sort_keys=True, default=str)
+    return hashlib.sha256(serialized_row.encode()).hexdigest()
+
+def _get_columns_from_schema(first_doc: Dict[str, Any]) -> list:
+    """Extracts column names from a document, excluding internal fields."""
+    return [key for key in first_doc.keys() if key not in ['_id', '_hash', 'upload_id']]
